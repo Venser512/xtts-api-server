@@ -11,6 +11,7 @@ import pyaudio
 import queue
 import time
 import wave
+import os
 
 class TextToAudioStream:
 
@@ -57,6 +58,9 @@ class TextToAudioStream:
         self.tokenizer = tokenizer
         self.language = language
         self.player = None
+        self.chunk_number = 0
+        self.wav_number = 1
+        self.wav_number_in_request = 0                       
 
         self._create_iterators()
 
@@ -126,6 +130,32 @@ class TextToAudioStream:
         return self
 
 
+    def check_for_stop(self, chunk):
+        #Check if 'check_stop.txt' contains '1', stop streaming, and reset.
+        filename = 'xtts_play_allowed.txt'          # File name to be checked
+        value = None                         # Variable to store the content of the file (if any)
+        try:
+            if not os.path.isfile(filename):
+                print("File "+filename+" does not exist.")
+
+            else:
+                with open(filename, 'r') as fp:
+                    data = fp.read().strip()           # Read the entire file and remove leading/trailing whitespace characters
+                    value = int(data)                  # Try converting the string to an integer
+
+                if value == 0:                         # If the file contains '0'
+                    if self.player:
+                        self.player.mute(True)
+                        self.player.stop(True)
+
+                    with open(filename, 'w+') as fp:   # Reopen the file in writing mode ('w+')
+                        fp.write('1\n')                # Reset the file contents to '1' (allowed)
+                        print("Stream stopped successfully!")
+                        return 0
+        except Exception as e:
+            print(f"An error occurred: {e}")
+                
+            return 0    
     def play_async(self,   
                    fast_sentence_fragment: bool = True,
                    buffer_threshold_seconds: float = 0.0,
@@ -135,7 +165,7 @@ class TextToAudioStream:
                    reset_generated_text: bool = True,
                    output_wavfile: str = None,
                    on_sentence_synthesized = None,
-                   on_audio_chunk = None,
+                   on_audio_chunk = check_for_stop,
                    tokenizer: str = "",
                    language: str = "",
                    context_size: int = 12,
@@ -159,7 +189,7 @@ class TextToAudioStream:
             reset_generated_text: bool = True,
             output_wavfile: str = None,
             on_sentence_synthesized = None,
-            on_audio_chunk = None,
+            on_audio_chunk = check_for_stop,
             tokenizer: str = "nltk",
             language: str = "en",
             context_size: int = 12,
@@ -190,6 +220,8 @@ class TextToAudioStream:
 
         # Log the start of the stream
         logging.info(f"stream start")
+        self.chunk_number = 0
+        self.wav_number_in_request = 0                            
 
         tokenizer = tokenizer if tokenizer else self.tokenizer 
         language = language if language else self.language
@@ -273,7 +305,7 @@ class TextToAudioStream:
                                 success = self.engine.synthesize(sentence)
                                 if success:
                                     if on_sentence_synthesized:
-                                        on_sentence_synthesized(sentence)
+                                        on_sentence_synthesized(self, sentence)
                                     synthesis_successful = True
                                 else:
                                     logging.warning(f"engine {self.engine.engine_name} failed to synthesize sentence \"{sentence}\", unknown error")
@@ -460,7 +492,7 @@ class TextToAudioStream:
                 self.wf.writeframes(chunk)
 
         if self.chunk_callback:
-            self.chunk_callback(chunk)
+            self.chunk_callback(self, chunk)
 
 
     def _on_last_character(self):

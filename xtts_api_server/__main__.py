@@ -20,6 +20,11 @@ parser.add_argument("--use-cache", action='store_true', help="Enables caching of
 parser.add_argument("--streaming-mode", action='store_true', help="Enables streaming mode, currently needs a lot of work.")
 parser.add_argument("--streaming-mode-improve", action='store_true', help="Includes an improved streaming mode that consumes 2gb more VRAM and uses a better tokenizer, good for languages such as Chinese")
 parser.add_argument("--stream-play-sync", action='store_true', help="Additional flag for streaming mod that allows you to play all audio one at a time without interruption")
+parser.add_argument("--stream-to-wavs", action='store_true', help="Save audio to multiple wav files. Audio is not played aloud")
+parser.add_argument("--call-wav2lip", action='store_true', help="Calls wav2lip after each wav chunk. Use with --stream-to-wavs and --output")
+parser.add_argument("--extras-url", default="http://127.0.0.1:5100/", help="Silly Tavern Extras url with trailing slash")
+parser.add_argument("--bat-dir", default="", help="current .bat file dir")
+parser.add_argument("--wav-chunk-sizes", default="10,20,40,100,200,300,400,9999", help="split wavs into chunks, with given number of latents per each wav file (10 latents for first wav of 0.45 s, 20 latents for second wav of 0.90 s). use with --stream-to-wavs. If wav2lip skips 2nd+ part of video, try changing to 20,40,100,200,300,400,9999 or even 100,200,300,400,9999 to make splitting less aggressive")
 
 args = parser.parse_args()
 
@@ -42,6 +47,11 @@ os.environ["LOWVRAM_MODE"] = str(args.lowvram).lower() # Set lowvram mode
 os.environ["STREAM_MODE"] = str(args.streaming_mode).lower() # Enable Streaming mode
 os.environ["STREAM_MODE_IMPROVE"] = str(args.streaming_mode_improve).lower() # Enable improved Streaming mode
 os.environ["STREAM_PLAY_SYNC"] = str(args.stream_play_sync).lower() # Enable Streaming mode
+os.environ["STREAM_TO_WAVS"] = str(args.stream_to_wavs).lower() # Enable stream-to-wavs mode
+os.environ["CALL_WAV2LIP"] = str(args.call_wav2lip).lower() # Enable calling wav2lip
+os.environ["EXTRAS_URL"] = str(args.extras_url).lower() # Silly Tavern Extras server url
+os.environ["BAT_DIR"] = str(args.bat_dir) # current .bat file dir
+os.environ["WAV_CHUNK_SIZES"] = str(args.wav_chunk_sizes) # list
 
 from xtts_api_server.server import app
 

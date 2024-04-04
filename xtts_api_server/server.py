@@ -7,6 +7,7 @@ from pydantic import BaseModel
 import uvicorn
 
 import os
+import sys
 import time
 from pathlib import Path
 import shutil
@@ -36,6 +37,7 @@ USE_CACHE = os.getenv("USE_CACHE") == 'true'
 STREAM_MODE = os.getenv("STREAM_MODE") == 'true'
 STREAM_MODE_IMPROVE = os.getenv("STREAM_MODE_IMPROVE") == 'true'
 STREAM_PLAY_SYNC = os.getenv("STREAM_PLAY_SYNC") == 'true'
+STREAM_TO_WAVS = os.getenv("STREAM_TO_WAVS") == 'true'
 
 if(DEEPSPEED):
   install_deepspeed_based_on_python_version()
@@ -134,6 +136,7 @@ class SynthesisRequest(BaseModel):
     text: str
     speaker_wav: str 
     language: str
+    reply_part: int = 0
 
 class SynthesisFileRequest(BaseModel):
     text: str
@@ -252,15 +255,55 @@ async def tts_stream(request: Request, text: str = Query(), speaker_wav: str = Q
 
 @app.post("/tts_to_audio/")
 async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTasks):
-    if STREAM_MODE or STREAM_MODE_IMPROVE:
+    full_path = os.path.join(os.environ['SPEAKER'], request.speaker_wav) 
+    wav_file = f"{full_path}.wav"
+    if not os.path.isfile(wav_file):
+        print("voice "+request.speaker_wav+"("+wav_file+") is not found, switching to 'default'")
+        request.speaker_wav = "default"        
+        
+    os.environ["SPEAKER_NAME"] = str(request.speaker_wav)    # to pass to wav2lip
+    if STREAM_MODE or STREAM_MODE_IMPROVE:        
         try:
             global stream
             # Validate language code against supported languages.
             if request.language.lower() not in supported_languages:
                 raise HTTPException(status_code=400,
                                     detail="Language code sent is either unsupported or misspelled.")
-
+            
+            # if voice not found -> use first found
+            folder_path = "speakers/"
+            if not os.path.isfile(folder_path+request.speaker_wav+".wav"):               
+                files = [ f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path,f)) and f.endswith(".wav") ]
+                if len(files) < 1:
+                    print("Error: no files in /speakers. Put some wavs there.")
+                else:
+                    filename = files[0].replace(".wav", "")                    
+                    print(" ["+request.speaker_wav+" not found, using "+filename+"]")
+                    request.speaker_wav = filename
+            print('[1m' + request.speaker_wav+'[0m: ' + request.text)
             speaker_wav = XTTS.get_speaker_wav(request.speaker_wav)
+            
+            # CHECK: dont play if user is talking
+            if STREAM_PLAY_SYNC:
+                filename = 'xtts_play_allowed.txt'          # File name to be checked
+                try:
+                    if not os.path.isfile(filename):
+                        print("File "+filename+" does not exist.")
+
+                    else:
+                        with open(filename, 'r') as fp:
+                            data = fp.read().strip()          
+                            play_allowed = int(data)                 
+
+                        if play_allowed == 0: # CHECK: dont play if user is talking
+                            print("user is speaking, xtts wont play")
+                            return FileResponse(
+                                path=output,
+                                media_type='audio/wav',
+                                filename="silence.wav",
+                            )
+                except Exception as e:
+                    print(f"An error occurred: {e}")
             language = request.language[0:2]
 
             if stream.is_playing() and not STREAM_PLAY_SYNC:
@@ -277,7 +320,7 @@ async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTa
             # It's a hack, just send 1 second of silence so that there is no sillyTavern error.
             this_dir = Path(__file__).parent.resolve()
             output = this_dir / "RealtimeTTS" / "silence.wav"
-
+            
             return FileResponse(
                 path=output,
                 media_type='audio/wav',
@@ -286,15 +329,19 @@ async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTa
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
     else:
-        try:
+        if 1:
+        #try:
             if XTTS.model_source == "local":
+              print(str(time.time())+" in server request")
               logger.info(f"Processing TTS to audio with request: {request}")
 
             # Validate language code against supported languages.
             if request.language.lower() not in supported_languages:
                 raise HTTPException(status_code=400,
                                     detail="Language code sent is either unsupported or misspelled.")
-
+            if (request.reply_part is not None):
+                os.environ["REPLY_PART"] = str(request.reply_part)
+                        
             # Generate an audio file using process_tts_to_file.
             output_file_path = XTTS.process_tts_to_file(
                 text=request.text,
@@ -302,20 +349,24 @@ async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTa
                 language=request.language.lower(),
                 file_name_or_path=f'{str(uuid4())}.wav'
             )
+            
 
             if not XTTS.enable_cache_results:
                 background_tasks.add_task(os.unlink, output_file_path)
+            print(str(time.time())+" DONE request")
+            if (STREAM_TO_WAVS):
+                return 0
+            else:
+                # Return the file in the response
+                return FileResponse(
+                    path=output_file_path,
+                    media_type='audio/wav',
+                    filename="output.wav",
+                    )
 
-            # Return the file in the response
-            return FileResponse(
-                path=output_file_path,
-                media_type='audio/wav',
-                filename="output.wav",
-                )
-
-        except Exception as e:
-            logger.error(e)
-            raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        #except Exception as e:
+        #    logger.error(e)
+        #    raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 @app.post("/tts_to_file")
 async def tts_to_file(request: SynthesisFileRequest):
