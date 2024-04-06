@@ -1,3 +1,7 @@
+### This is part of talk-llama-fast. Don't use installation guide at current page here, it is outdated and left for legacy. Full and actual instruction how to install is here: https://github.com/Mozer/talk-llama-fast
+
+Old and original readme:
+
 # A simple FastAPI Server to run XTTSv2
 
 This project is inspired by [silero-api-server](https://github.com/ouoertheo/silero-api-server) and utilizes [XTTSv2](https://github.com/coqui-ai/TTS).
