@@ -12,6 +12,7 @@ import queue
 import time
 import wave
 import os
+import tempfile
 
 class TextToAudioStream:
 
@@ -129,33 +130,41 @@ class TextToAudioStream:
         self.char_iter.add(text_or_iterator)
         return self
 
-
-    def check_for_stop(self, chunk):
-        #Check if 'check_stop.txt' contains '1', stop streaming, and reset.
-        filename = 'xtts_play_allowed.txt'          # File name to be checked
-        value = None                         # Variable to store the content of the file (if any)
+    
+    def get_shared_temp_value(self):
+        file_path = os.path.join(tempfile.gettempdir(), "xtts_play_allowed.txt")
         try:
-            if not os.path.isfile(filename):
-                print("File "+filename+" does not exist.")
-
-            else:
-                with open(filename, 'r') as fp:
-                    data = fp.read().strip()           # Read the entire file and remove leading/trailing whitespace characters
-                    value = int(data)                  # Try converting the string to an integer
-
-                if value == 0:                         # If the file contains '0'
-                    if self.player:
-                        self.player.mute(True)
-                        self.player.stop(True)
-
-                    with open(filename, 'w+') as fp:   # Reopen the file in writing mode ('w+')
-                        fp.write('1\n')                # Reset the file contents to '1' (allowed)
-                        print("Stream stopped successfully!")
-                        return 0
-        except Exception as e:
-            print(f"An error occurred: {e}")
+            with open(file_path, "r") as file:
+                value = file.read().strip()
+            return value
+        except IOError:
+            print(f"Error reading from file, maybe not exists: {file_path}")
+            return None
+        
+    # NEW, temp/xtts_play_allowed.txt for '0' or '1'
+    # @filename: not used, we store file in /temp
+    # returns: int 0 - stop, 1 - play allowed
+    def xtts_play_allowed_check(self):
+        #Check if var contains '0', stop streaming.
+        value = self.get_shared_temp_value()
+        if (value is None): # var not set
+            value = 1        
+        else:
+            value = int(value)        
+        
+        return value  
+    
+    def check_for_stop(self, chunk):
+        value = self.xtts_play_allowed_check()
+        if value == 0:                         # If the file contains '0'
+            if self.player:
+                self.player.mute(True)
+                self.player.stop(True)
+                print("Speech! Stream stopped.")
+                return 0
                 
-            return 0    
+            return 0   
+            
     def play_async(self,   
                    fast_sentence_fragment: bool = True,
                    buffer_threshold_seconds: float = 0.0,
