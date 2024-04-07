@@ -15,6 +15,7 @@ from loguru import logger
 from argparse import ArgumentParser
 from pathlib import Path
 from uuid import uuid4
+import tempfile
 
 from xtts_api_server.tts_funcs import TTSWrapper,supported_languages,InvalidSettingsError
 from xtts_api_server.RealtimeTTS import TextToAudioStream, CoquiEngine
@@ -285,7 +286,7 @@ async def tts_to_audio(request: SynthesisRequest, background_tasks: BackgroundTa
             
             # CHECK: dont play if user is talking
             if STREAM_PLAY_SYNC:
-                filename = 'xtts_play_allowed.txt'          # File name to be checked
+                filename = os.path.join(tempfile.gettempdir(), "xtts_play_allowed.txt")
                 try:
                     if not os.path.isfile(filename):
                         print("File "+filename+" does not exist.")
