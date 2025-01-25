@@ -54,7 +54,7 @@ default_tts_settings = {
     "top_k" : 50,
     "top_p" : 0.85,
     "speed" : 1,
-    "enable_text_splitting": True
+    "enable_text_splitting": False
 }
 
 official_model_list = ["v2.0.0","v2.0.1","v2.0.2","v2.0.3","main"]
@@ -74,7 +74,7 @@ class TTSWrapper:
         self.model_source = model_source
         self.model_version = model_version
         self.tts_settings = default_tts_settings
-        self.stream_chunk_size = 100
+        self.stream_chunk_size = 400
 
         self.deepspeed = deepspeed
 
