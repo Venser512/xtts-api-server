@@ -1,4 +1,4 @@
-### This is part of talk-llama-fast. Don't use installation guide at current page here, it is outdated and left for legacy. Full and actual instruction how to install is here: https://github.com/Mozer/talk-llama-fast
+### This is part of TG VIDEO BOT. Don't use installation guide at current page here, it is outdated and left for legacy. Full and actual instruction how to install is here: https://github.com/Venser512/tg_video_bot
 
 Old and original readme:
 
